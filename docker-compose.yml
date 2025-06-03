@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: always
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092" # Porta para clientes SSL externos
+      - "29092:29092" # Porta para comunicação interna (e para Schema Registry)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,SSL:SSL'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,SSL://localhost:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT' # Para simplicidade, comunicação inter-broker em PLAINTEXT. Mude para SSL se quiser 100% SSL.
+      KAFKA_SSL_TRUSTSTORE_LOCATION: '/etc/kafka/secrets/kafka.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: 'confluent'
+      KAFKA_SSL_KEYSTORE_LOCATION: '/etc/kafka/secrets/kafka.keystore.jks'
+      KAFKA_SSL_KEYSTORE_PASSWORD: 'confluent'
+      KAFKA_SSL_KEY_PASSWORD: 'confluent'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - ./certs:/etc/kafka/secrets # Monta a pasta de certificados no container
+    depends_on:
+      - zookeeper
+    restart: always
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.3
+    hostname: schema-registry
+    container_name: schema-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'zookeeper:2181' # O Schema Registry se conecta ao ZooKeeper para descobrir os brokers Kafka
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'SSL://kafka:9092' # O Schema Registry se conecta ao Kafka via SSL
+      SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081' # Você pode adicionar HTTPS aqui se quiser SSL para o Schema Registry também
+      # Configurações SSL para Schema Registry se conectar ao Kafka
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_LOCATION: '/etc/schema-registry/secrets/schemaregistry.truststore.jks'
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_TRUSTSTORE_PASSWORD: 'confluent'
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEYSTORE_LOCATION: '/etc/schema-registry/secrets/schemaregistry.keystore.jks'
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEYSTORE_PASSWORD: 'confluent'
+      SCHEMA_REGISTRY_KAFKASTORE_SSL_KEY_PASSWORD: 'confluent'
+    volumes:
+      - ./certs:/etc/schema-registry/secrets # Monta a pasta de certificados no container
+    depends_on:
+      - kafka
+    restart: always
