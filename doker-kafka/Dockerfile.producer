@@ -1,0 +1,17 @@
+# Use uma imagem base Python
+FROM python:3.9-slim-buster
+
+# Define o diretório de trabalho dentro do container
+WORKDIR /app
+
+# Copia o arquivo requirements.txt (se tiver) e instala as dependências
+# É uma boa prática ter um requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia o script do produtor e a pasta de certificados
+COPY producer.py .
+COPY certs /app/certs
+
+# Comando para executar o produtor quando o container iniciar
+CMD ["python", "producer.py"]

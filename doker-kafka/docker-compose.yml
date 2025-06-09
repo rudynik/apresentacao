@@ -1,0 +1,68 @@
+services:
+  cert-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./certs:/app/certs
+    container_name: cert-generator
+    restart: "no"
+
+  kafka:
+    image: confluentinc/cp-server:7.9.1
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      cert-generator:
+        condition: service_completed_successfully
+    ports:
+      - "9093:9093"
+      - "9101:9101"
+    environment:
+      CLUSTER_ID: "HNk8T1k3T5eZC3z1XHk9JA"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+
+      KAFKA_LISTENERS: 'SSL://kafka:9093,CONTROLLER://kafka:29093'
+      KAFKA_ADVERTISED_LISTENERS: 'SSL://kafka:9093'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,SSL:SSL'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.server.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: kafka.server.keystore-creds
+      KAFKA_SSL_KEY_CREDENTIALS: kafka.server.key-creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.server.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: kafka.server.truststore-creds
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - ./certs:/etc/kafka/secrets
+    command: ["bash", "-c", "ls -l /etc/kafka/secrets && /etc/confluent/docker/run"]  # 👈 Debug temporário
+
+  kafka-init-topic:
+    image: confluentinc/cp-kafka:7.9.1
+    hostname: kafka-init-topic
+    container_name: kafka-init-topic
+    depends_on:
+      kafka:
+        condition: service_started
+    volumes:
+      - ./certs:/etc/kafka/secrets
+      - ./init-kafka-topic.sh:/init-kafka-topic.sh
+    command: ["bash", "/init-kafka-topic.sh"]
+    restart: "no"
+
+  python-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    depends_on:
+      kafka-init-topic:
+        condition: service_completed_successfully
+    container_name: python-producer
+    volumes:
+      - ./certs:/app/certs
+    restart: "no"
